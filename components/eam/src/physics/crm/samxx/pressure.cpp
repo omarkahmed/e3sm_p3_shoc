@@ -43,56 +43,30 @@ void pressure() {
   //   for (int j=0; j<ny; j++) {
   //     for (int i=0; i<nx; i++) {
   //       for (int icrm=0; icrm<ncrms; icrm++) {
+  //yakl::Array<real,4,yakl::memDevice,yakl::styleC> f("data", nzslab, ny+2, nx+2, ncrms);
   parallel_for( SimpleBounds<4>(nzslab,ny,nx,ncrms) , YAKL_LAMBDA (int k, int j, int i, int icrm) {
     f(k,j,i,icrm) = p(k,j+offy_p,i+offx_p,icrm);
   });
 
   #ifndef USE_ORIG_FFT
 
-    //yakl::RealFFT1D<nx> fftx;
-    // yakl::RealFFT1D<fftySize> ffty;
-    //fftx.init(fftx.trig);
-    //ffty.init(ffty.trig);
-  yakl::RealFFT1D<real> fftx;
-  yakl::RealFFT1D<real> ffty;
-
-  real1d ftmp_x("ftmp_x", nx+2);
-  real1d ftmp_y("ftmp_y", ny+2);
-
     // for (int k=0; k<nzslab; k++) {
     //  for (int j=0; j<ny; j++) {
     //      for (int icrm=0; icrm<ncrms; icrm++) {
-    parallel_for( SimpleBounds<3>(nzslab,ny,ncrms) , YAKL_LAMBDA (int k, int j, int icrm) {
-      //SArray<real,1,nx+2> ftmp;
+    yakl::RealFFT1D<real> fftx;
+    yakl::RealFFT1D<real> ffty;
 
-      for (int i=0; i<nx ; i++) { ftmp_x(i) = f(k,j,i,icrm); }
-    });
-
-    //fftx.forward(ftmp, fftx.trig, yakl::FFT_SCALE_ECMWF);
-    fftx.init(ftmp_x, 0, nx);
-    fftx.forward_real(ftmp_x);
-    parallel_for( SimpleBounds<3>(nzslab,ny,ncrms) , YAKL_LAMBDA (int k, int j, int icrm) {
-
-      for (int i=0; i<nx2; i++) { f(k,j,i,icrm) = ftmp_x(i); }
-    });
+    fftx.init(f, 2, nx);
+    ffty.init(f, 1, fftySize);
+    
+    fftx.forward_real(f); // Batched over y,  z, ncrms dimensions
 
     if (RUN3D) {
       // for (int k=0; k<nzslab; k++) {
       //  for (int i=0; j<nx+1; i++) {
       //    for(int l=0; l<ny2; l++) {
       //      for (int icrm=0; icrm<ncrms; icrm++) {
-      parallel_for( SimpleBounds<3>(nzslab,nx+1,ncrms) , YAKL_LAMBDA (int k, int i, int icrm) {
-        //SArray<real,1,ny+2> ftmp;
-
-        for (int j=0; j<ny ; j++) { ftmp_y(j) = f(k,j,i,icrm); }
-      });
-
-      ffty.init(ftmp_y, 0, fftySize);
-      ffty.forward_real(ftmp_y);
-      //ffty.forward(ftmp, ffty.trig, yakl::FFT_SCALE_ECMWF);
-      parallel_for( SimpleBounds<3>(nzslab,nx+1,ncrms) , YAKL_LAMBDA (int k, int i, int icrm) {
-        for (int j=0; j<ny2; j++) { f(k,j,i,icrm) = ftmp_y(j); }
-      });
+      ffty.forward_real(f); // Batched over x, z, ncrms dimensions
     }
 
   #else
@@ -221,31 +195,13 @@ void pressure() {
       // for (int k=0; k<nzslab; k++) {
       //   for (int i=0; i<nx+1; i++) {
       //     for (int icrm=0; icrm<ncrms; icrm++) {
-      parallel_for( SimpleBounds<3>(nzslab,nx+1,ncrms) , YAKL_LAMBDA (int k, int i, int icrm) {
-        //SArray<real,1,ny+2> ftmp;
-        
-        for(int j=0; j<ny+2; j++) { ftmp_y(j) = f(k,j,i,icrm); }
-      });
-      ffty.inverse_real(ftmp_y);
-        //ffty.inverse(ftmp, ffty.trig, yakl::FFT_SCALE_ECMWF);
-      parallel_for( SimpleBounds<3>(nzslab,nx+1,ncrms) , YAKL_LAMBDA (int k, int i, int icrm) {
-        for(int j=0; j<ny  ; j++) { f(k,j,i,icrm) = ftmp_y(j); } 
-      });
+      ffty.inverse_real(f); // Batched over x, z, ncrms dimensions
     }
 
     // for (int k=0; k<nzslab; k++) {
     //   for (int j=0; i<ny; i++) {
     //     for (int icrm=0; icrm<ncrms; icrm++) {
-    parallel_for( SimpleBounds<3>(nzslab,ny,ncrms) , YAKL_LAMBDA (int k, int j, int icrm) {
-      //SArray<real,1,nx+2> ftmp;
-
-      for(int i=0; i<nx+2; i++) { ftmp_x(i) = f(k,j,i,icrm); }
-    });
-    fftx.inverse_real(ftmp_x);
-      //fftx.inverse(ftmp, fftx.trig, yakl::FFT_SCALE_ECMWF);
-    parallel_for( SimpleBounds<3>(nzslab,ny,ncrms) , YAKL_LAMBDA (int k, int j, int icrm) {
-      for(int i=0; i<nx  ; i++) { f(k,j,i,icrm) = ftmp_x(i); }
-    });
+    fftx.inverse_real(f); // Batched over y, z, ncrms dimensions
 
   #else
 
